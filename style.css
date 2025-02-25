@@ -1,0 +1,8 @@
+h1 {
+  padding: 10px 0;
+  text-align: center;
+}
+.window {
+  height: 650px;
+  background-color: aqua;
+}
