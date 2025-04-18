@@ -1,4 +1,3 @@
-from ..services import utils
 import streamlit as st
 import cv2
 import numpy as np
@@ -7,8 +6,8 @@ import io
 import sys
 import os
 
-# Add the parent directory to path to import from services
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from src.services import utils
+from src.components.sidebar import filter_functions
 
 
 def dashboard():
@@ -46,14 +45,15 @@ def dashboard():
 
                 # Display the uploaded image
                 st.image(image, caption="Uploaded Image",
-                         use_column_width=True)
+                         use_container_width=True)
 
                 # Reset applied filters when new image is uploaded
                 st.session_state.applied_filters = []
             else:
                 # Default image
-                st.image("https://picsum.photos/seed/picsum/200/300",
-                         caption="Default Image")
+                # st.image("https://picsum.photos/seed/picsum/200/300",
+                #          caption="Default Image")
+                pass
 
         with layers:
             st.subheader("Applied Filters")
@@ -80,8 +80,6 @@ def dashboard():
             if (st.session_state.original_image is not None and
                 "selected_filters" in st.session_state and
                     "filter_params" in st.session_state):
-
-                from components.sidebar import filter_functions
 
                 selected_filter = st.session_state.selected_filters.get(
                     "filters")
@@ -113,8 +111,7 @@ def dashboard():
                 st.image(
                     st.session_state.processed_image,
                     caption="Processed Image",
-                    use_column_width=True
+                    use_container_width=True
                 )
             else:
-                st.image("https://picsum.photos/id/237/200/300",
-                         caption="Default Output")
+                pass
