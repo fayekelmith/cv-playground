@@ -432,3 +432,256 @@ def apply_filters(image, filter_list):
         elif filter_name == 'pencil':
             result = apply_pencil_sketch(result)
     return result
+
+# --- Feature Detection and Homography ---
+
+
+def detect_and_describe_features(image, method='sift', color_mode='grayscale'):
+    """
+    Detect and describe features using SIFT, ORB, or Harris.
+
+    Parameters:
+    - image: Input image (color or grayscale)
+    - method: 'sift', 'orb', or 'harris' (default='sift')
+    - color_mode: 'grayscale' or 'per_channel' (default='grayscale')
+
+    Returns:
+    - Keypoints and descriptors (or corner response for Harris)
+    """
+    if len(image.shape) == 3 and color_mode == 'per_channel':
+        image_gray = [cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)] * 3
+    elif len(image.shape) == 3:
+        image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        image_gray = image
+
+    if method == 'sift':
+        sift = cv2.SIFT_create()
+        if color_mode == 'per_channel':
+            all_keypoints, all_descriptors = [], []
+            for ch in cv2.split(image):
+                kp, des = sift.detectAndCompute(ch, None)
+                all_keypoints.extend(kp)
+                all_descriptors.append(des)
+            return all_keypoints, np.vstack(all_descriptors) if len(all_descriptors) > 0 and all(des is not None for des in all_descriptors) else None
+        else:
+            return sift.detectAndCompute(image_gray, None)
+    elif method == 'orb':
+        orb = cv2.ORB_create()
+        if color_mode == 'per_channel':
+            all_keypoints = []
+            for ch in cv2.split(image):
+                kp, _ = orb.detectAndCompute(ch, None)
+                all_keypoints.extend(kp)
+            return all_keypoints, None
+        else:
+            return orb.detectAndCompute(image_gray, None)
+    elif method == 'harris':
+        if color_mode == 'per_channel':
+            channels = cv2.split(image)
+            corner_images = [cv2.cornerHarris(
+                ch.astype(np.float32), 2, 3, 0.04) for ch in channels]
+            combined_corners = np.maximum.reduce(corner_images)
+        else:
+            combined_corners = cv2.cornerHarris(
+                image_gray.astype(np.float32), 2, 3, 0.04)
+        return combined_corners, None
+
+# --- Homography Functions ---
+
+
+def compute_homography(src_points, dst_points):
+    """
+    Compute homography matrix using RANSAC.
+    """
+    H, _ = cv2.findHomography(src_points, dst_points, cv2.RANSAC, 5.0)
+    return H
+
+
+def perspective_to_orthogonal(image, src_points, dst_points):
+    """
+    Warp perspective image to orthogonal view using four points.
+    """
+    H = compute_homography(src_points, dst_points)
+    height, width = image.shape[:2]
+    return cv2.warpPerspective(image, H, (width, height))
+
+
+def orthogonal_to_perspective(image, src_points, dst_points):
+    """
+    Warp orthogonal image to perspective view using four points.
+    """
+    H = compute_homography(src_points, dst_points)
+    height, width = image.shape[:2]
+    H_inv = np.linalg.inv(H)
+    return cv2.warpPerspective(image, H_inv, (width, height))
+
+# --- Harris Corner Detector ---
+
+
+def apply_harris_corner(image, block_size=2, ksize=3, k=0.04, color_mode='per_channel'):
+    """
+    Apply Harris Corner Detection with color handling options.
+    """
+    if len(image.shape) == 3 and color_mode == 'per_channel':
+        channels = cv2.split(image)
+        corner_images = [cv2.cornerHarris(
+            ch.astype(np.float32), block_size, ksize, k) for ch in channels]
+        combined_corners = np.maximum.reduce(corner_images)
+    else:
+        if len(image.shape) == 3:
+            image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            image_gray = image
+        combined_corners = cv2.cornerHarris(
+            image_gray.astype(np.float32), block_size, ksize, k)
+
+    # Make a color copy for marking corners
+    if len(image.shape) == 3:
+        marked_image = image.copy()
+    else:
+        marked_image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+
+    # Mark corners with red dots
+    marked_image[combined_corners > 0.01 *
+                 combined_corners.max()] = [0, 0, 255]
+    return marked_image
+
+# --- ORB Feature Detection ---
+
+
+def apply_orb_features(image, nfeatures=500, color_mode='per_channel'):
+    """
+    Apply ORB feature detection with color handling options.
+    """
+    orb = cv2.ORB_create(nfeatures=nfeatures)
+    if len(image.shape) == 3 and color_mode == 'per_channel':
+        channels = cv2.split(image)
+        all_keypoints = []
+        for channel in channels:
+            keypoints, _ = orb.detectAndCompute(channel, None)
+            all_keypoints.extend(keypoints)
+        marked_image = cv2.drawKeypoints(
+            image, all_keypoints, None, color=(0, 255, 0), flags=0)
+    else:
+        if len(image.shape) == 3:
+            image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            image_gray = image
+        keypoints, _ = orb.detectAndCompute(image_gray, None)
+        marked_image = cv2.drawKeypoints(cv2.cvtColor(image_gray, cv2.COLOR_GRAY2BGR) if len(image.shape) == 2 else image,
+                                         keypoints, None, color=(0, 255, 0), flags=0)
+    return marked_image
+
+# --- Color Space Conversion ---
+
+
+def rgb_to_hsv(image):
+    """
+    Convert RGB image to HSV.
+    """
+    if len(image.shape) == 3:
+        return cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    return image
+
+
+def hsv_to_rgb(image):
+    """
+    Convert HSV image to RGB.
+    """
+    if len(image.shape) == 3:
+        return cv2.cvtColor(image, cv2.COLOR_HSV2RGB)
+    return image
+
+# --- Image Segmentation ---
+
+
+def segment_image(image, method='otsu', color_mode='grayscale'):
+    """
+    Segment image using Otsu's thresholding or Canny edges.
+
+    Parameters:
+    - image: Input image (color or grayscale)
+    - method: 'otsu' or 'canny' (default='otsu')
+    - color_mode: 'grayscale' or 'per_channel' (default='grayscale')
+
+    Returns:
+    - Segmented image (grayscale)
+    """
+    if len(image.shape) == 3:
+        if color_mode == 'per_channel':
+            channels = cv2.split(image)
+            segmented_channels = []
+            for ch in channels:
+                if method == 'otsu':
+                    _, seg = cv2.threshold(
+                        ch, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                elif method == 'canny':
+                    seg = cv2.Canny(ch, 100, 200)
+                segmented_channels.append(seg)
+            return cv2.merge(segmented_channels)
+        else:
+            image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        image_gray = image
+
+    if method == 'otsu':
+        _, segmented = cv2.threshold(
+            image_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    elif method == 'canny':
+        segmented = cv2.Canny(image_gray, 100, 200)
+    return segmented
+
+# --- Stereo Stitching ---
+
+
+def stitch_images(img1, img2):
+    """
+    Stitch two images using feature matching and homography.
+    """
+    # Convert images to grayscale for feature detection
+    if len(img1.shape) == 3:
+        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    else:
+        gray1 = img1
+
+    if len(img2.shape) == 3:
+        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    else:
+        gray2 = img2
+
+    # Detect and compute SIFT features
+    sift = cv2.SIFT_create()
+    kp1, des1 = sift.detectAndCompute(gray1, None)
+    kp2, des2 = sift.detectAndCompute(gray2, None)
+
+    # Match features
+    matcher = cv2.BFMatcher()
+    matches = matcher.knnMatch(des1, des2, k=2)
+
+    # Apply ratio test
+    good_matches = []
+    for m, n in matches:
+        if m.distance < 0.75 * n.distance:
+            good_matches.append(m)
+
+    if len(good_matches) > 10:
+        # Extract location of good matches
+        src_pts = np.float32(
+            [kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        dst_pts = np.float32(
+            [kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+        # Find homography matrix
+        H, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+
+        # Warp img1 to align with img2
+        height, width = max(
+            img1.shape[0], img2.shape[0]), img1.shape[1] + img2.shape[1]
+        stitched = cv2.warpPerspective(img1, H, (width, height))
+
+        # Place img2 in the result image
+        stitched[0:img2.shape[0], 0:img2.shape[1]] = img2
+
+        return stitched
+    return None
