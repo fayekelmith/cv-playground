@@ -12,10 +12,9 @@ from src.components.sidebar import filter_functions
 
 def dashboard():
     with st.container():
-        st.markdown("<h1>Computer Vision Playground</h1>",
-                    unsafe_allow_html=True)
+        st.markdown(
+            "<h1 style='text-align: center; margin-bottom: 20px;'>CV Playground - Theory Sucks! </h1>", unsafe_allow_html=True)
 
-        # Initialize session state for tracking applied filters
         if "applied_filters" not in st.session_state:
             st.session_state.applied_filters = []
 
@@ -25,11 +24,12 @@ def dashboard():
         if "processed_image" not in st.session_state:
             st.session_state.processed_image = None
 
-        image_section, layers, output_section = st.columns(
-            [5, 2, 5], border=True)
+        image_section, output_section = st.columns(
+            [5, 5], border=False)
 
         with image_section:
-            st.subheader("Input Image")
+            st.markdown(
+                "<h2 style='text-align: center; margin-bottom: 20px;'>Input Image </h2>", unsafe_allow_html=True)
             uploaded_file = st.file_uploader(
                 "Upload an image", type=["jpg", "jpeg", "png"])
 
@@ -52,30 +52,9 @@ def dashboard():
             else:
                 st.info("Please upload an image to get started")
 
-        with layers:
-            st.subheader("Applied Filters")
-            # Display applied filters
-            if st.session_state.applied_filters:
-                # Use st.expander for better display if list gets long
-                with st.expander("Show Applied Filters", expanded=True):
-                    for i, (filter_name, params) in enumerate(st.session_state.applied_filters):
-                        st.write(f"{i+1}. {filter_name}")
-                        # Display parameters concisely
-                        param_str = ", ".join(
-                            [f"{k}={v}" for k, v in params.items()])
-                        if param_str:
-                            st.caption(f"   Params: {param_str}")
-            else:
-                st.write("No filters applied yet.")
-
-            # Add button to reset all filters
-            if st.button("Reset Filters", key="reset_filters_button") and st.session_state.original_image is not None:
-                st.session_state.processed_image = st.session_state.original_image.copy()
-                st.session_state.applied_filters = []
-                st.rerun()
-
         with output_section:
-            st.subheader("Output Image")
+            st.markdown(
+                "<h2 style='text-align: center; margin-bottom: 20px;'>Output Image</h2>", unsafe_allow_html=True)
 
             # Process the image if we have an image and selected filters
             if st.session_state.original_image is not None:
