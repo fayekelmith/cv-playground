@@ -9,11 +9,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 interactions: dict = {
     "filters": ["Grayscale", "Blur", "Edge Detection", "FFT Filter", "Median Filter",
                 "Bilateral Filter", "Laplacian", "Canny Edge", "Morphological",
-                "Kuwahara Filter", "Cartoon Effect", "Pencil Sketch", "Custom"],
-    "transformations": ["Rotate", "Flip", "Crop", "Resize", "Pad", "Warp", "Affine", "Perspective", "Custom"],
-    "segmentation": ["Thresholding", "Edge Detection", "Contour", "Watershed", "GrabCut", "Custom"],
-    "detection": ["Face", "Object", "Text", "Custom"],
+                "Kuwahara Filter", "Cartoon Effect", "Pencil Sketch", "Harris Corner",
+                "ORB Features", "Custom"],
+    "transformations": ["Rotate", "Flip", "Crop", "Resize", "Pad", "Warp",
+                        "Perspective to Orthogonal", "HSV Color Space", "Custom"],
+    "segmentation": ["Thresholding", "Edge Detection", "Contour", "Otsu", "Canny Segmentation",
+                     "Watershed", "GrabCut", "Custom"],
+    "detection": ["Face", "Harris Corner", "ORB Features", "Object", "Text", "Custom"],
     "classification": ["ImageNet", "Custom"],
+    "advanced": ["Image Stitching", "Homography", "Feature Detection"]
 }
 
 # Dictionary mapping filter names to functions
@@ -93,6 +97,58 @@ filter_functions = {
         "params": {}
     }
 }
+additional_filters = {
+    "Harris Corner": {
+        "function": utils.apply_harris_corner,
+        "params": {
+            "block_size": (1, 10, 1, 2),
+            "ksize": (1, 31, 2, 3),
+            "k": (0.01, 0.1, 0.01, 0.04),
+            "color_mode": ["grayscale", "per_channel"]
+        }
+    },
+    "ORB Features": {
+        "function": utils.apply_orb_features,
+        "params": {
+            "nfeatures": (100, 1000, 100, 500),
+            "color_mode": ["grayscale", "per_channel"]
+        }
+    },
+    "HSV Color Space": {
+        "function": utils.rgb_to_hsv,
+        "params": {}
+    },
+    "Perspective to Orthogonal": {
+        "function": utils.perspective_to_orthogonal,
+        "params": {
+            "src_points": "corners",  # Special parameter that will need custom handling
+            "dst_points": "corners"   # Special parameter that will need custom handling
+        }
+    },
+    "Otsu": {
+        "function": utils.segment_image,
+        "params": {
+            "method": ["otsu"],
+            "color_mode": ["grayscale", "per_channel"]
+        }
+    },
+    "Canny Segmentation": {
+        "function": utils.segment_image,
+        "params": {
+            "method": ["canny"],
+            "color_mode": ["grayscale", "per_channel"]
+        }
+    },
+    "Image Stitching": {
+        "function": utils.stitch_images,
+        "params": {
+            "img2": "second_image"  # This would need special handling to upload a second image
+        }
+    }
+}
+
+
+filter_functions.update(additional_filters)
 
 
 def sidebar():
