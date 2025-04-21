@@ -50,25 +50,26 @@ def dashboard():
                 # Reset applied filters when new image is uploaded
                 st.session_state.applied_filters = []
             else:
-                # Default image
-                # st.image("https://picsum.photos/seed/picsum/200/300",
-                #          caption="Default Image")
-                pass
+                st.info("Please upload an image to get started")
 
         with layers:
             st.subheader("Applied Filters")
-
             # Display applied filters
             if st.session_state.applied_filters:
-                for i, (filter_name, params) in enumerate(st.session_state.applied_filters):
-                    st.write(f"{i+1}. {filter_name}")
-                    for param_name, param_value in params.items():
-                        st.write(f"   - {param_name}: {param_value}")
+                # Use st.expander for better display if list gets long
+                with st.expander("Show Applied Filters", expanded=True):
+                    for i, (filter_name, params) in enumerate(st.session_state.applied_filters):
+                        st.write(f"{i+1}. {filter_name}")
+                        # Display parameters concisely
+                        param_str = ", ".join(
+                            [f"{k}={v}" for k, v in params.items()])
+                        if param_str:
+                            st.caption(f"   Params: {param_str}")
             else:
-                st.write("No filters applied yet")
+                st.write("No filters applied yet.")
 
             # Add button to reset all filters
-            if st.button("Reset Filters") and st.session_state.original_image is not None:
+            if st.button("Reset Filters", key="reset_filters_button") and st.session_state.original_image is not None:
                 st.session_state.processed_image = st.session_state.original_image.copy()
                 st.session_state.applied_filters = []
                 st.rerun()
@@ -77,41 +78,101 @@ def dashboard():
             st.subheader("Output Image")
 
             # Process the image if we have an image and selected filters
-            if (st.session_state.original_image is not None and
-                "selected_filters" in st.session_state and
-                    "filter_params" in st.session_state):
+            if st.session_state.original_image is not None:
+                if "selected_filters" in st.session_state:
+                    selected_filter = st.session_state.selected_filters.get(
+                        "filters")
 
-                selected_filter = st.session_state.selected_filters.get(
-                    "filters")
+                    if selected_filter in filter_functions:
+                        filter_info = filter_functions[selected_filter]
 
-                # Apply button for the selected filter
-                if selected_filter in filter_functions and st.button(f"Apply {selected_filter}"):
-                    filter_info = filter_functions[selected_filter]
-                    filter_params = st.session_state.filter_params.get(
-                        selected_filter, {})
+                        if "filter_params" in st.session_state and selected_filter in st.session_state.filter_params:
+                            filter_params = st.session_state.filter_params.get(
+                                selected_filter, {})
 
-                    # Apply the filter
-                    processed = filter_info["function"](
-                        st.session_state.processed_image,
-                        **filter_params
-                    )
+                            button_key = f"apply_button_{selected_filter}"
+                            if st.button(f"Apply {selected_filter}", key=button_key):
+                                try:
 
-                    # Update the processed image
-                    st.session_state.processed_image = processed
+                                    input_image = st.session_state.processed_image.copy()
 
-                    # Add to applied filters list
-                    st.session_state.applied_filters.append(
-                        (selected_filter, filter_params))
+                                    processed = filter_info["function"](
+                                        input_image,
+                                        **filter_params
+                                    )
 
-                    # Rerun to update the UI
-                    st.rerun()
+                                    if processed is None:
+                                        raise ValueError(
+                                            f"Filter returned None")
+
+                                    processed = np.asarray(
+                                        processed, dtype=np.uint8)
+
+                                    if len(processed.shape) == 2 and len(input_image.shape) == 3:
+                                        processed = cv2.cvtColor(
+                                            processed, cv2.COLOR_GRAY2RGB)
+
+                                    st.session_state.processed_image = processed
+
+                                    current_filter_entry = (
+                                        selected_filter, filter_params.copy())
+                                    st.session_state.applied_filters.append(
+                                        current_filter_entry)
+
+                                    st.success(
+                                        f"Applied {selected_filter} filter successfully")
+
+                                except Exception as e:
+                                    st.error(
+                                        f"Error applying filter: {str(e)}")
+                                    import traceback
+                                    st.sidebar.write(traceback.format_exc())
+                        else:
+                            # This might occur if the filter has no parameters defined in sidebar.py
+                            st.warning(
+                                f"Parameters configuration not found for {selected_filter}. Applying without params if possible.")
+                            # Attempt to apply without params if button pressed
+                            button_key = f"apply_button_{selected_filter}_no_params"
+                            if st.button(f"Apply {selected_filter}", key=button_key):
+                                try:
+                                    # ... (similar try block as above, but without **filter_params) ...
+                                    input_image = st.session_state.processed_image.copy()
+                                    processed = filter_info["function"](
+                                        input_image)  # Call without params
+
+                                    # ... (rest of the processing, state update, and rerun logic) ...
+                                    if processed is None:
+                                        raise ValueError(
+                                            f"Filter returned None")
+                                    processed = np.asarray(
+                                        processed, dtype=np.uint8)
+                                    if len(processed.shape) == 2 and len(input_image.shape) == 3:
+                                        processed = cv2.cvtColor(
+                                            processed, cv2.COLOR_GRAY2RGB)
+
+                                    st.session_state.processed_image = processed
+                                    st.session_state.applied_filters.append(
+                                        (selected_filter, {}))  # Append with empty params
+                                    st.success(
+                                        f"Applied {selected_filter} filter successfully (no params).")
+
+                                except Exception as e:
+                                    st.error(
+                                        f"Error applying filter (no params): {str(e)}")
+                                    import traceback
+                                    st.sidebar.write(traceback.format_exc())
+
+                else:
+                    st.info("Select a filter from the sidebar.")
 
             # Display the processed image or a default image
             if st.session_state.processed_image is not None:
+                processed_image_display = np.asarray(
+                    st.session_state.processed_image, dtype=np.uint8)
                 st.image(
-                    st.session_state.processed_image,
-                    caption="Processed Image",
-                    use_container_width=True
+                    processed_image_display,
+                    caption=f"Processed Image ({processed_image_display.shape})",
+                    use_container_width=True,
                 )
             else:
-                pass
+                st.info("Upload an image and apply filters to see results.")
