@@ -9,8 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 interactions: dict = {
     "filters": ["Grayscale", "Blur", "Edge Detection", "FFT Filter", "Median Filter",
                 "Bilateral Filter", "Laplacian", "Canny Edge", "Morphological",
-                "Kuwahara Filter", "Cartoon Effect", "Pencil Sketch", "Harris Corner",
-                "ORB Features", "Custom"],
+                "Kuwahara Filter", "Cartoon Effect", "Pencil Sketch", "Custom"],
     "transformations": ["Rotate", "Flip", "Crop", "Resize", "Pad", "Warp",
                         "Perspective to Orthogonal", "HSV Color Space", "Custom"],
     "segmentation": ["Thresholding", "Edge Detection", "Contour", "Otsu", "Canny Segmentation",
@@ -20,12 +19,13 @@ interactions: dict = {
     "advanced": ["Image Stitching", "Homography", "Feature Detection"]
 }
 
-# Dictionary mapping filter names to functions
-filter_functions = {
+# Dictionary mapping tool names to functions
+tool_functions = {
+    # Filters
     "Blur": {
         "function": utils.apply_gaussian_filter,
         "params": {
-            "kernel_size": (1, 31, 2, 5),  # (min, max, step, default)
+            "kernel_size": (1, 31, 2, 5),
             "sigma": (0.1, 10.0, 0.1, 1.0)
         }
     },
@@ -41,7 +41,6 @@ filter_functions = {
             "cutoff_frequency": (1, 100, 1, 30)
         }
     },
-
     "Median Filter": {
         "function": utils.apply_median_filter,
         "params": {
@@ -95,9 +94,9 @@ filter_functions = {
     "Pencil Sketch": {
         "function": utils.apply_pencil_sketch,
         "params": {}
-    }
-}
-additional_filters = {
+    },
+
+    # Detection tools
     "Harris Corner": {
         "function": utils.apply_harris_corner,
         "params": {
@@ -114,6 +113,8 @@ additional_filters = {
             "color_mode": ["grayscale", "per_channel"]
         }
     },
+
+    # Transformation tools
     "HSV Color Space": {
         "function": utils.rgb_to_hsv,
         "params": {}
@@ -121,10 +122,12 @@ additional_filters = {
     "Perspective to Orthogonal": {
         "function": utils.perspective_to_orthogonal,
         "params": {
-            "src_points": "corners",  # Special parameter that will need custom handling
-            "dst_points": "corners"   # Special parameter that will need custom handling
+            "src_points": "corners",
+            "dst_points": "corners"
         }
     },
+
+    # Segmentation tools
     "Otsu": {
         "function": utils.segment_image,
         "params": {
@@ -139,59 +142,86 @@ additional_filters = {
             "color_mode": ["grayscale", "per_channel"]
         }
     },
+
+    # Advanced tools
     "Image Stitching": {
         "function": utils.stitch_images,
         "params": {
-            "img2": "second_image"  # This would need special handling to upload a second image
+            "img2": "second_image"
         }
     }
 }
 
-
-filter_functions.update(additional_filters)
+# For backward compatibility
+filter_functions = tool_functions
 
 
 def sidebar():
     with st.sidebar:
         st.subheader("Tools")
-
         st.markdown("Select a tool to get started.")
 
         selected_filters = {}
+        active_category = None
+        active_tool = None
+
+        # First, scan through all categories to display them
         for (key, value) in interactions.items():
             selection = st.selectbox(
                 key.capitalize(), value, key=f"select_{key}")
             selected_filters[key] = selection
 
-            # If a filter is selected and it exists in our mapping, show parameter controls
-            if key == "filters" and selection in filter_functions:
-                filter_info = filter_functions[selection]
-                filter_params = {}
+            # Find the first non-Custom selection to determine the active category and tool
+            if selection != "Custom" and selection in tool_functions and active_category is None:
+                active_category = key
+                active_tool = selection
 
-               # Create controls for each parameter
-                for param_name, param_range in filter_info["params"].items():
-                    # If param_range is a list, create a dropdown
-                    if isinstance(param_range, list):
-                        filter_params[param_name] = st.selectbox(
-                            f"{param_name.capitalize()}",
-                            options=param_range,
-                            key=f"param_{selection}_{param_name}"
-                        )
-                    # Otherwise create a slider
-                    else:
-                        min_val, max_val, step, default = param_range
-                        filter_params[param_name] = st.slider(
-                            f"{param_name.capitalize()}",
-                            min_value=min_val,
-                            max_value=max_val,
-                            step=step,
-                            value=default,
-                            key=f"param_{selection}_{param_name}"
-                        )
-                # Store the parameters in session state
-                if "filter_params" not in st.session_state:
-                    st.session_state.filter_params = {}
-                st.session_state.filter_params[selection] = filter_params
+        st.markdown("---")
+
+        # Display parameters for the active tool (regardless of category)
+        if active_tool and active_tool in tool_functions:
+            st.markdown(f"### {active_tool} Parameters")
+            st.markdown(f"*Category: {active_category.capitalize()}*")
+
+            tool_info = tool_functions[active_tool]
+            tool_params = {}
+
+            # Create controls for each parameter
+            for param_name, param_range in tool_info["params"].items():
+                # Skip special parameters that need custom UI elements
+                if param_range == "corners" or param_range == "second_image":
+                    continue
+
+                # If param_range is a list, create a dropdown
+                if isinstance(param_range, list):
+                    tool_params[param_name] = st.selectbox(
+                        f"{param_name.capitalize()}",
+                        options=param_range,
+                        key=f"param_{active_tool}_{param_name}"
+                    )
+                # Otherwise create a slider
+                else:
+                    min_val, max_val, step, default = param_range
+                    tool_params[param_name] = st.slider(
+                        f"{param_name.capitalize()}",
+                        min_value=min_val,
+                        max_value=max_val,
+                        step=step,
+                        value=default,
+                        key=f"param_{active_tool}_{param_name}"
+                    )
+
+            # Store the parameters in session state
+            if "filter_params" not in st.session_state:
+                st.session_state.filter_params = {}
+            st.session_state.filter_params[active_tool] = tool_params
+
+            # Add an info section indicating the active tool
+            st.markdown("---")
+            st.info(
+                f"Active tool: {active_tool} ({active_category.capitalize()})")
 
         # Store selected filters in session state
         st.session_state.selected_filters = selected_filters
+        st.session_state.active_category = active_category
+        st.session_state.active_tool = active_tool
